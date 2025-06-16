@@ -204,7 +204,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 	default:
 		// Default response
 		response := Response{
-			Status:  "VALID",
+			Status:  licenseKey,
 			Message: "License is valid",
 		}
 		jsonResponse, _ := json.Marshal(response)
