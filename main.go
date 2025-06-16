@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -22,18 +23,32 @@ type Response struct {
 var licenseKey string
 var port string = "444" // default port
 var certDir string = "/root/back_certs/"
+var version string = "0.0.1" // version will be set during build
 
 func main() {
-	// Parse command line arguments
-	if len(os.Args) > 1 {
-		licenseKey = os.Args[1]
+	// Parse command line flags
+	var showVersion bool
+	flag.BoolVar(&showVersion, "version", false, "Show version and exit")
+	flag.BoolVar(&showVersion, "v", false, "Show version and exit (shorthand)")
+	flag.Parse()
+
+	// Show version if requested
+	if showVersion {
+		fmt.Printf("local_license version %s\n", version)
+		os.Exit(0)
+	}
+
+	// Parse remaining command line arguments
+	args := flag.Args()
+	if len(args) > 0 {
+		licenseKey = args[0]
 		fmt.Printf("License key set to: %s\n", licenseKey)
 	} else {
 		fmt.Println("No license key provided")
 	}
 
-	if len(os.Args) > 2 {
-		port = os.Args[2]
+	if len(args) > 1 {
+		port = args[1]
 		fmt.Printf("Port set to: %s\n", port)
 	} else {
 		fmt.Printf("Using default port: %s\n", port)
