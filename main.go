@@ -169,17 +169,112 @@ func loadCertificates() (*tls.Config, error) {
 	return tlsConfig, nil
 }
 
+// Helper function to get the real client IP address
+func getClientIP(r *http.Request) string {
+	// Check X-Forwarded-For header (most common with proxies/load balancers)
+	xForwardedFor := r.Header.Get("X-Forwarded-For")
+	if xForwardedFor != "" {
+		// X-Forwarded-For can contain multiple IPs, take the first one
+		ips := strings.Split(xForwardedFor, ",")
+		return strings.TrimSpace(ips[0])
+	}
+
+	// Check X-Real-IP header (common with Nginx)
+	xRealIP := r.Header.Get("X-Real-IP")
+	if xRealIP != "" {
+		return xRealIP
+	}
+
+	// Check CF-Connecting-IP header (Cloudflare)
+	cfConnectingIP := r.Header.Get("CF-Connecting-IP")
+	if cfConnectingIP != "" {
+		return cfConnectingIP
+	}
+
+	// Check X-Client-IP header
+	xClientIP := r.Header.Get("X-Client-IP")
+	if xClientIP != "" {
+		return xClientIP
+	}
+
+	// Fallback to RemoteAddr
+	ip := r.RemoteAddr
+	if strings.Contains(ip, ":") {
+		ip = strings.Split(ip, ":")[0]
+	}
+	return ip
+}
+
 func handleRequest(w http.ResponseWriter, r *http.Request) {
-	// Log request headers and info
+	// Log comprehensive request information
 	log.Println("--------------------------------------")
+	log.Printf("Timestamp: %s", time.Now().UTC().Format("2006-01-02 15:04:05 UTC"))
 	log.Printf("Request URL: %s", r.URL.Path)
 	log.Printf("Request Method: %s", r.Method)
 	log.Printf("Host: %s", r.Host)
 	log.Printf("TLS: %v", r.TLS != nil)
 
+	// Log client IP address (with proxy support)
+	clientIP := getClientIP(r)
+	log.Printf("Client IP: %s", clientIP)
+
+	// Log remote address
+	log.Printf("Remote Address: %s", r.RemoteAddr)
+
+	// Log request URI with query parameters
+	log.Printf("Request URI: %s", r.RequestURI)
+
+	// Log protocol version
+	log.Printf("Protocol: %s", r.Proto)
+
+	// Log content length
+	log.Printf("Content Length: %d", r.ContentLength)
+
+	// Log transfer encoding
+	if len(r.TransferEncoding) > 0 {
+		log.Printf("Transfer Encoding: %v", r.TransferEncoding)
+	}
+
+	// Log all headers
+	log.Println("Request Headers:")
 	for name, values := range r.Header {
 		for _, value := range values {
-			log.Printf("Header %s: %s", name, value)
+			log.Printf("  %s: %s", name, value)
+		}
+	}
+
+	// Log query parameters
+	if len(r.URL.RawQuery) > 0 {
+		log.Printf("Query String: %s", r.URL.RawQuery)
+		log.Println("Query Parameters:")
+		for key, values := range r.URL.Query() {
+			for _, value := range values {
+				log.Printf("  %s: %s", key, value)
+			}
+		}
+	}
+
+	// Log form data for POST requests (if content type is form)
+	if r.Method == "POST" && strings.Contains(r.Header.Get("Content-Type"), "application/x-www-form-urlencoded") {
+		if err := r.ParseForm(); err == nil {
+			log.Println("Form Data:")
+			for key, values := range r.Form {
+				for _, value := range values {
+					log.Printf("  %s: %s", key, value)
+				}
+			}
+		}
+	}
+
+	// Log request body for JSON requests (be careful with sensitive data)
+	if r.Method == "POST" || r.Method == "PUT" || r.Method == "PATCH" {
+		if strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+			bodyBytes, err := ioutil.ReadAll(r.Body)
+			if err == nil {
+				// Restore the body for further processing
+				r.Body = ioutil.NopCloser(strings.NewReader(string(bodyBytes)))
+				log.Printf("Request Body: %s", string(bodyBytes))
+			}
 		}
 	}
 
@@ -210,6 +305,8 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 		jsonResponse, _ := json.Marshal(response)
 		fmt.Fprint(w, string(jsonResponse))
 	}
+
+	log.Println("--------------------------------------")
 }
 
 func handleLicense(w http.ResponseWriter, r *http.Request) {
